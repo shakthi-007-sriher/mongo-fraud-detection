@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fraud Watch</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<style>
+:root {
+  --bg: #0f1419; --panel: #171d25; --panel2: #1d2530; --line: #263040; --text: #e6edf3; --muted: #8b98a8;
+  --ok: #3fb68b; --warn: #f0b429; --bad: #ff5c5c; --accent: #4da3ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+header { display: flex; align-items: center; gap: 20px; padding: 12px 24px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+.kpis { display: flex; gap: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; min-width: 100px; }
+.kpi b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.status { margin-left: auto; font-size: 12px; color: var(--muted); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+.dot.live { background: var(--ok); } .dot.paused { background: var(--warn); }
+nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+nav button:hover { color: var(--text); }
+nav button.on { color: var(--text); border-bottom-color: var(--accent); }
+nav kbd { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+.tab { display: none; padding: 16px 24px 28px; }
+.tab.on { display: block; }
+section, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+h2 { font-size: 12px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+h2 .grow { flex: 1; }
+.grid2 { display: grid; grid-template-columns: minmax(420px, 1.1fr) 1fr; gap: 16px; }
+.stack { display: grid; gap: 16px; align-content: start; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); } .small { font-size: 12px; }
+.btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: #1f5fae; border-color: #2f73d1; }
+.btn.danger { background: #5a1d22; border-color: #8a2b33; }
+.btn:disabled { opacity: .5; cursor: default; }
+.chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+.chip:hover { border-color: var(--accent); }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+input[type=text], input[type=number], select { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-width: 0; }
+input:focus, select:focus { outline: 1px solid var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.toggle { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; user-select: none; font-size: 13px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; }
+td { padding: 4px 6px; border-top: 1px solid var(--line); }
+td.num, th.num { text-align: right; }
+tbody tr.click { cursor: pointer; } tbody tr.click:hover td { background: rgba(77,163,255,.1); }
+tr.flagged td { background: rgba(255,92,92,.14); color: #ffb3b3; }
+.pill { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: #3a1517; color: #ffb3b3; margin-right: 4px; white-space: nowrap; }
+.pill.ok { background: #14352b; color: #8be0c0; } .pill.warm { background: #3a3114; color: #f0d98a; }
+#banner { margin-bottom: 14px; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
+#banner.flash { animation: flash .5s ease-in-out 6; color: #fff; border-color: var(--bad); }
+@keyframes flash { 0%,100% { background: #3a1517; } 50% { background: #b3202a; } }
+.chartbox { position: relative; height: 220px; } .chartbox.tall { height: 300px; }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+ul.plain li { padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+ul.plain li:first-child { border-top: 0; } ul.plain li:hover { background: rgba(77,163,255,.08); }
+ul.plain li .when { color: var(--muted); font-size: 12px; margin-left: auto; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--panel2); border-radius: 8px; padding: 8px 12px; }
+.stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; } .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.bar { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; border: 1px solid var(--line); }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.bar.risk i { background: linear-gradient(90deg, var(--ok), var(--warn), var(--bad)); }
+.barline { display: grid; grid-template-columns: 150px 1fr 48px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
+.big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.verdict { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.verdict:first-child { border-top: 0; }
+.verdict .big { width: 80px; font-size: 32px; text-align: center; }
+.verdict.pending .big { color: var(--muted); font-size: 18px; }
+.help h3 { margin: 18px 0 6px; font-size: 15px; } .help p, .help li { color: #c4cdd8; max-width: 80ch; } .help code, .help kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.help dt { font-weight: 600; margin-top: 8px; } .help dd { margin: 2px 0 0 0; color: #c4cdd8; max-width: 80ch; }
+#drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0,0,0,.4); transform: translateX(105%); transition: transform .2s; overflow-y: auto; padding: 16px 18px; z-index: 10; }
+#drawer.open { transform: none; }
+#drawer h3 { margin: 0 0 4px; font-size: 16px; }
+#toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #0b2a4a; border: 1px solid var(--accent); padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+#toast.show { opacity: 1; } #toast.err { background: #4a1116; border-color: var(--bad); }
+pre.log { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 150px; overflow: auto; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; }
+details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 8px; }
+.radarwrap { position: relative; width: 100%; max-width: 640px; margin: 0 auto; }
+#c-radar { width: 100%; aspect-ratio: 1; background: radial-gradient(circle, #0d2a1f 0%, #0a1a14 70%, #08120e 100%); border: 1px solid #1d4d3a; border-radius: 50%; cursor: crosshair; display: block; }
+.atk { display: grid; gap: 8px; align-content: start; }
+.atk h3 { margin: 0; font-size: 15px; }
+#cy { height: 480px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.cond { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+.cmp td:first-child { color: var(--muted); }
+/* ---- polish layer ---- */
+body { background: radial-gradient(1100px 520px at 8% -12%, rgba(77,163,255,.16), transparent 60%), radial-gradient(900px 480px at 100% -5%, rgba(176,92,255,.12), transparent 60%), var(--bg); background-attachment: fixed; }
+header { position: sticky; top: 0; z-index: 8; background: rgba(15,20,25,.82); backdrop-filter: blur(10px); }
+h1 { font-size: 19px; background: linear-gradient(90deg, #7cc0ff, #b99cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h1 small { display: block; font-size: 11px; font-weight: 400; letter-spacing: .4px; -webkit-text-fill-color: var(--muted); color: var(--muted); }
+.kpi { position: relative; overflow: hidden; }
+.kpi::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
+section, .card { box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px rgba(0,0,0,.18); }
+.btn { transition: border-color .15s, transform .05s, box-shadow .15s; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: linear-gradient(180deg, #2b7be0, #1f5fae); box-shadow: 0 0 0 0 rgba(77,163,255,.5); }
+.btn.primary:hover { box-shadow: 0 0 14px rgba(77,163,255,.45); }
+.btn.lg { padding: 9px 18px; font-weight: 600; font-size: 14px; }
+body.touring { padding-bottom: 210px; }
+.btn.magic { background: linear-gradient(90deg, #6b3fd4, #2b7be0); border-color: #7f5cf0; font-weight: 600; }
+.btn.magic:hover { box-shadow: 0 0 16px rgba(127,92,240,.55); }
+.hchips { display: flex; gap: 8px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+.hchip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 3px 10px; }
+.hchip i { width: 8px; height: 8px; border-radius: 50%; background: #55606e; } .hchip.on { color: var(--text); } .hchip.on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.status { margin-left: 0; }
+nav button.on { box-shadow: 0 8px 12px -10px var(--accent); }
+.intro { color: #b4c0ce; background: linear-gradient(90deg, rgba(77,163,255,.10), transparent); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 14px; max-width: 110ch; }
+.intro b { color: var(--text); }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+ol.steps li { display: flex; gap: 10px; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--muted); }
+ol.steps li i { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a4658; display: grid; place-items: center; font-style: normal; font-size: 12px; }
+ol.steps li.done { color: var(--text); border-color: #2c6a54; } ol.steps li.done i { background: var(--ok); border-color: var(--ok); color: #06251a; }
+ol.steps li.wait i { border-color: var(--warn); border-top-color: transparent; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#onboard { margin-bottom: 14px; border-color: #29507d; background: linear-gradient(135deg, rgba(31,95,174,.18), var(--panel)); }
+#tour { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 140%); width: min(720px, calc(100vw - 24px)); background: #101a2b; border: 1px solid #7f5cf0; border-radius: 12px; padding: 14px 18px; z-index: 30; box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 30px rgba(127,92,240,.25); transition: transform .3s; }
+#tour.on { transform: translate(-50%, 0); }
+#tour .tstep { font-size: 11px; letter-spacing: 1px; color: #b99cff; text-transform: uppercase; }
+#tour h4 { margin: 2px 0 4px; font-size: 16px; } #tour p { margin: 0 0 8px; color: #c4cdd8; }
+#tour .tbar { height: 3px; background: var(--line); border-radius: 2px; margin-bottom: 8px; overflow: hidden; } #tour .tbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7f5cf0, #4da3ff); transition: width .4s; }
+#rd-tip { position: fixed; pointer-events: none; background: #0b1220; border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 12px; z-index: 15; display: none; white-space: nowrap; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; } .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+.ready { margin: 0 0 14px; } .ready .bar { margin-top: 6px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .tab { padding: 12px; } header, nav { padding-left: 12px; padding-right: 12px; } .barline { grid-template-columns: 110px 1fr 40px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fraud Watch<small>real-time fraud detection, powered by MongoDB</small></h1>
+  <div class="kpis">
+    <div class="kpi"><b id="k-eps">-</b><span>events / s</span></div>
+    <div class="kpi"><b id="k-flag">-</b><span>flagged (60 s)</span></div>
+    <div class="kpi"><b id="k-lat">-</b><span>avg latency ms</span></div>
+  </div>
+  <div class="hchips">
+    <span class="hchip" id="h-det"><i></i>Detector</span><span class="hchip" id="h-gen"><i></i>Demo traffic</span>
+    <button class="btn primary" id="h-all" title="Start the detector and the demo traffic">&#9654; Start everything</button>
+    <button class="btn magic" id="h-tour" title="A 2-minute automatic walk-through">&#10024; Guided demo</button>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">connecting...</span></div>
+  </div>
+</header>
+<nav id="nav">
+  <button data-tab="live" class="on">Live monitor<kbd>1</kbd></button>
+  <button data-tab="radar">Radar<kbd>2</kbd></button>
+  <button data-tab="attack">Attack lab<kbd>3</kbd></button>
+  <button data-tab="rings">Fraud rings<kbd>4</kbd></button>
+  <button data-tab="rules">Rule builder<kbd>5</kbd></button>
+  <button data-tab="investigate">Investigate<kbd>6</kbd></button>
+  <button data-tab="try">Try it yourself<kbd>7</kbd></button>
+  <button data-tab="tune">Tune &amp; what-if<kbd>8</kbd></button>
+  <button data-tab="help">How to use<kbd>9</kbd></button>
+</nav>
+
+<!-- ============ 1. LIVE MONITOR ============ -->
+<div class="tab on" id="tab-live">
+  <section id="onboard">
+    <h2>Get started <span class="grow"></span><button class="btn primary lg" id="ob-all">&#9654; Start everything</button><button class="btn magic lg" id="ob-tour">&#10024; Guided demo</button></h2>
+    <ol class="steps">
+      <li id="st-server"><i></i>Connected to MongoDB</li>
+      <li id="st-det"><i></i>Detector is running</li>
+      <li id="st-gen"><i></i>Demo traffic is running</li>
+      <li id="st-flow"><i></i>Transactions are flowing</li>
+    </ol>
+    <div class="muted small" id="ob-note" style="margin-top:8px">Press <b>Start everything</b>. Rows appear within seconds. Fraud is injected after a short warm-up, and then the banner below starts flashing.</div>
+  </section>
+  <div class="intro"><b>What is this?</b> Fake customers make payments. MongoDB watches every payment as it arrives and gives it a <b>risk score from 0 to 100</b> by comparing it with that customer's own normal behaviour. Red rows are payments it considers fraud.</div>
+  <div id="banner" title="Click to see why">No anomalies yet. Start the detector and the demo traffic below.</div>
+  <div class="grid2">
+    <div class="stack">
+      <section>
+        <h2>Live transactions <span class="grow"></span>
+          <label class="toggle"><input type="checkbox" id="only-flagged"> flagged only</label>
+          <label class="toggle"><input type="checkbox" id="sound"> sound</label>
+          <button class="btn" id="pause">Pause <kbd>p</kbd></button></h2>
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th class="num">Amount</th><th class="num">Risk</th><th>Flags</th></tr></thead>
+          <tbody id="ticker"></tbody>
+        </table>
+        <div class="muted small" style="margin-top:8px">Click any row to see why it got its score.</div>
+      </section>
+      <section>
+        <h2>Pipeline control</h2>
+        <div class="row" style="justify-content:space-between">
+          <div><b>Detector</b> <span id="det-state" class="pill">stopped</span><br><span class="muted small">scores every new transaction</span></div>
+          <div class="row"><button class="btn primary" id="det-start">Start</button><button class="btn" id="det-stop">Stop</button></div>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:12px 0">
+        <div class="row" style="justify-content:space-between;align-items:flex-end">
+          <div><b>Demo traffic</b> <span id="gen-state" class="pill">stopped</span><br><span class="muted small">fake users, with fraud injected after the warm-up</span></div>
+          <div class="row">
+            <div class="field"><label for="gen-users">Users</label><input type="number" id="gen-users" value="200" min="10" max="2000" style="width:80px"></div>
+            <div class="field"><label for="gen-warm">Warm-up (s)</label><input type="number" id="gen-warm" value="60" min="0" max="900" style="width:80px"></div>
+            <button class="btn primary" id="gen-start">Start</button><button class="btn" id="gen-stop">Stop</button>
+          </div>
+        </div>
+        <details><summary>Show process messages</summary><pre class="log" id="proc-log">(nothing yet)</pre></details>
+      </section>
+    </div>
+    <div class="stack">
+      <section><h2>Throughput and alerts per second (last 60 s)</h2><div class="chartbox"><canvas id="c-rate"></canvas></div></section>
+      <section><h2>Risk score of the latest transactions</h2><div class="chartbox"><canvas id="c-risk"></canvas></div></section>
+      <section><h2>Recent alerts <span class="muted small" style="text-transform:none;letter-spacing:0">(click one)</span></h2><ul class="plain" id="alerts"></ul></section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RADAR ============ -->
+<div class="tab" id="tab-radar">
+  <div class="intro"><b>Radar.</b> A live picture of every payment. <b>Near the centre = safe, near the edge = risky.</b> Hover over a dot for details, click it for the full explanation.</div>
+  <div class="grid2">
+    <section>
+      <h2>Live radar <span class="grow"></span><span class="small muted" style="text-transform:none;letter-spacing:0" id="radar-status">connecting...</span></h2>
+      <div class="radarwrap"><canvas id="c-radar"></canvas></div>
+      <div class="legend"><span><i style="background:#78e6be"></i>normal payment</span><span><i style="background:#ff5c5c"></i>flagged as fraud</span><span><i style="background:transparent;border:1px dashed #f0b429"></i>alert threshold</span></div>
+      <div class="muted small" style="margin-top:8px">Every scored transaction is a dot. Its <b>angle</b> is fixed per user, its <b>distance from the centre</b> is its risk score, and the dashed ring is the alert threshold. Red dots outside the ring are flagged. Dots fade after 25 seconds. Click a dot to see why. Events arrive by push from a MongoDB change stream on the scores collection.</div>
+    </section>
+    <div class="stack">
+      <section><h2>Counters</h2>
+        <div class="cards" style="margin:0"><div class="stat"><b id="rd-n">0</b><span>seen</span></div><div class="stat"><b id="rd-f">0</b><span>flagged</span></div><div class="stat"><b id="rd-s">0</b><span>on screen</span></div></div></section>
+      <section><h2>Latest flagged (pushed live)</h2><ul class="plain" id="rd-feed"><li class="muted">Nothing flagged yet.</li></ul></section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ATTACK LAB ============ -->
+<div class="tab" id="tab-attack">
+  <div class="intro"><b>Attack lab.</b> Play the attacker. Each button sends a staged attack into MongoDB using real demo customers, and the detector judges it like any other payment. Customers need a little history first, so wait until the meter below is green.</div>
+  <div class="ready"><div class="row small"><b id="atk-ready-t">Checking...</b></div><div class="bar"><i id="atk-ready-b"></i></div></div>
+  <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+    <div class="card atk"><h3>Botnet ring</h3><div class="muted small">Several accounts all pay about 10 times their normal amount from the <b>same device</b>.</div>
+      <div class="row"><div class="field"><label for="atk-size">Accounts</label><input type="number" id="atk-size" value="6" min="3" max="12" style="width:70px"></div><button class="btn danger" data-atk="botnet">Launch botnet</button></div>
+      <div class="muted small">Then open <b>Fraud rings</b>: the shared device ties the accounts together.</div></div>
+    <div class="card atk"><h3>Card testing</h3><div class="muted small">One account makes 12 tiny payments in 3 seconds from a new device, probing whether a stolen card works.</div>
+      <div><button class="btn danger" data-atk="cardtest">Launch card testing</button></div>
+      <div class="muted small">Caught by the <b>velocity</b> signal, not the amount.</div></div>
+    <div class="card atk"><h3>Impossible travel</h3><div class="muted small">An account pays at home, then 2.5 seconds later makes a large payment from another country on a new device.</div>
+      <div><button class="btn danger" data-atk="travel">Launch travel attack</button></div>
+      <div class="muted small">Caught by the <b>amount</b> signal. The country and device show up as context in the explanation.</div></div>
+  </div>
+  <section style="margin-top:16px"><h2>Result <span class="grow"></span><button class="btn" id="atk-clear">Clear</button></h2>
+    <div class="muted small" id="atk-what">Nothing launched yet.</div><div id="atk-results"></div></section>
+</div>
+
+<!-- ============ FRAUD RINGS ============ -->
+<div class="tab" id="tab-rings">
+  <div class="intro"><b>Fraud rings.</b> Criminals reuse devices. This graph links accounts that were flagged on the <b>same device</b>, so one look shows a whole network. Launch a botnet in the Attack lab, then press <b>Find rings</b>.</div>
+  <div class="grid2" style="grid-template-columns:minmax(420px,1.5fr) 1fr">
+    <section>
+      <h2>Fraud-ring graph <span class="grow"></span>
+        <select id="ring-min"><option value="10">last 10 min</option><option value="30" selected>last 30 min</option><option value="120">last 2 h</option></select>
+        <button class="btn primary" id="ring-go">Find rings</button></h2>
+      <div id="cy"></div>
+      <div class="muted small" style="margin-top:8px">Red circles are flagged accounts, blue squares are devices they share. MongoDB finds the rings with <code>$graphLookup</code>, following device links from account to account. Click an account to investigate it.</div>
+    </section>
+    <section><h2>Rings found</h2><div id="ring-list"><div class="muted">Press "Find rings".</div></div></section>
+  </div>
+</div>
+
+<!-- ============ RULE BUILDER ============ -->
+<div class="tab" id="tab-rules">
+  <div class="intro"><b>Rule builder.</b> Write your own fraud rule, such as "foreign country and amount over 100", and test it on real history. You instantly see how many frauds it catches and how many innocent payments it would block.</div>
+  <div class="grid2">
+    <section>
+      <h2>Build a rule</h2>
+      <div class="row small" style="margin-bottom:8px"><span class="muted">Start from:</span>
+        <button class="chip" data-preset="travel">Foreign country + big amount</button><button class="chip" data-preset="newdev">New device + big amount</button>
+        <button class="chip" data-preset="fast">Fast burst</button><button class="chip" data-preset="zhigh">Unusual for the user</button></div>
+      <div id="rule-conds"></div>
+      <div class="row" style="margin:8px 0"><button class="btn" id="rule-add">+ Add condition</button></div>
+      <div class="row"><label class="toggle"><input type="checkbox" id="rule-geo"> country differs from the user's home country</label></div>
+      <div class="row" style="margin-top:4px"><label class="toggle"><input type="checkbox" id="rule-dev"> device is new (not one of the user's own devices)</label></div>
+      <div class="row" style="margin-top:12px"><select id="rule-min"><option value="10">last 10 min</option><option value="30" selected>last 30 min</option><option value="120">last 2 h</option></select>
+        <button class="btn primary" id="rule-test">Test against history</button></div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+      <div class="row"><input type="text" id="rule-name" placeholder="name this rule" style="width:180px"><button class="btn" id="rule-save">Save</button></div>
+      <h2 style="margin-top:14px">Saved rules</h2><ul class="plain" id="rule-saved"><li class="muted">none</li></ul>
+    </section>
+    <section>
+      <h2>Back-test result</h2>
+      <div id="rule-out" class="muted">Build a rule and press "Test against history". MongoDB replays it over recent scored transactions and compares it with the built-in model, using the generator's ground-truth labels.</div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ 2. INVESTIGATE ============ -->
+<div class="tab" id="tab-investigate">
+  <section style="margin-bottom:16px">
+    <h2>Pick a user</h2>
+    <div class="row">
+      <input type="text" id="inv-user" list="user-list" placeholder="user id, e.g. u0042" style="width:200px" autocomplete="off">
+      <datalist id="user-list"></datalist>
+      <button class="btn primary" id="inv-go">Show</button>
+      <button class="btn" id="inv-refresh">Refresh lists</button>
+    </div>
+    <div class="row small" style="margin-top:10px"><span class="muted">Most alerts:</span><span class="row" id="chips-flagged"></span></div>
+    <div class="row small" style="margin-top:6px"><span class="muted">Busiest:</span><span class="row" id="chips-busy"></span></div>
+  </section>
+  <div id="inv-empty" class="muted">Choose a user above, or click a user in the live table, to see their behaviour.</div>
+  <div id="inv-body" style="display:none">
+    <div class="cards" id="inv-cards"></div>
+    <div class="grid2">
+      <section><h2>Amounts over time <span class="muted small" style="text-transform:none;letter-spacing:0">click a dot</span></h2><div class="chartbox tall"><canvas id="c-user"></canvas></div>
+        <div class="muted small">Dots are transactions (red = flagged). The blue line is the rolling average and the dashed line is the average plus 3 standard deviations, both computed by MongoDB over a 10-minute sliding window.</div></section>
+      <section><h2>Latest transactions of this user</h2>
+        <table><thead><tr><th>Time</th><th class="num">Amount</th><th class="num">Risk</th><th>Flags</th></tr></thead><tbody id="inv-table"></tbody></table></section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3. TRY IT ============ -->
+<div class="tab" id="tab-try">
+  <div class="grid2">
+    <section>
+      <h2>Send a transaction into MongoDB</h2>
+      <div class="row" style="align-items:flex-end">
+        <div class="field"><label for="try-user">User</label><input type="text" id="try-user" list="user-list" placeholder="u0001" style="width:140px" autocomplete="off"></div>
+        <div class="field"><label for="try-amount">Amount</label><input type="number" id="try-amount" value="40" min="0.01" step="0.01" style="width:110px"></div>
+        <button class="btn" id="try-random">Pick an active user</button>
+      </div>
+      <div class="muted small" id="try-hint" style="margin:8px 0 12px">Type a user id. Existing users have a learned "typical amount".</div>
+      <div class="row">
+        <button class="btn primary" id="try-send">Send this amount</button>
+        <button class="btn" id="try-normal">Send a normal one</button>
+        <button class="btn danger" id="try-spike">Send a spike (10x typical)</button>
+        <button class="btn danger" id="try-burst">Send a burst (12 in 3 s)</button>
+      </div>
+      <p class="muted small">The page inserts the transaction into <code>tx_inbox</code>. The detector (a change stream) picks it up, MongoDB scores it, and the verdict appears on the right. The detector must be running (Live monitor tab).</p>
+    </section>
+    <section>
+      <h2>Verdicts <span class="grow"></span><button class="btn" id="try-clear">Clear</button></h2>
+      <div id="try-results"><div class="muted">Nothing sent yet.</div></div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ 4. TUNE ============ -->
+<div class="tab" id="tab-tune">
+  <div class="grid2">
+    <section>
+      <h2>What if the alert threshold were different?
+        <span class="grow"></span>
+        <select id="wi-minutes"><option value="5">last 5 min</option><option value="10" selected>last 10 min</option><option value="30">last 30 min</option><option value="120">last 2 h</option></select>
+        <button class="btn" id="wi-refresh">Refresh</button></h2>
+      <div class="chartbox tall"><canvas id="c-whatif"></canvas></div>
+      <div class="field" style="margin:12px 0 4px"><label for="s-scoreAlert">Alert threshold: <b id="v-scoreAlert">60</b> (flag when risk is at or above this)</label>
+        <input type="range" id="s-scoreAlert" min="5" max="100" step="5" value="60"></div>
+      <div class="cards" id="wi-cards"></div>
+      <div class="muted small" id="wi-note"></div>
+    </section>
+    <section>
+      <h2>Detector settings (stored in MongoDB)</h2>
+      <div class="field"><label for="s-zLow">Amount starts to count at z = <b id="v-zLow">2.5</b></label><input type="range" id="s-zLow" min="1" max="5" step="0.5"></div>
+      <div class="field" style="margin-top:10px"><label for="s-zHigh">Amount is fully suspicious at z = <b id="v-zHigh">6</b></label><input type="range" id="s-zHigh" min="3" max="10" step="0.5"></div>
+      <div class="field" style="margin-top:10px"><label for="s-burstSoft">Velocity starts to count at <b id="v-burstSoft">4</b> events in 5 s</label><input type="range" id="s-burstSoft" min="2" max="10" step="1"></div>
+      <div class="field" style="margin-top:10px"><label for="s-burstHard">Velocity is fully suspicious at <b id="v-burstHard">8</b> events in 5 s</label><input type="range" id="s-burstHard" min="4" max="20" step="1"></div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn primary" id="cfg-save">Save to MongoDB</button>
+        <button class="btn" id="cfg-reset">Reset to defaults</button>
+      </div>
+      <p class="muted small">Saving updates the <code>config</code> document. The running detector re-reads it every 5 seconds and applies it to new transactions. Already-scored transactions keep their old scores.</p>
+    </section>
+  </div>
+</div>
+
+<!-- ============ 5. HELP ============ -->
+<div class="tab help" id="tab-help">
+  <section>
+    <h2>How to work this dashboard</h2>
+    <h3>First time</h3>
+    <ol>
+      <li>Open <b>Live monitor</b>. Click <b>Start</b> next to <b>Detector</b>, then <b>Start</b> next to <b>Demo traffic</b>. (Or run them in terminals with <code>npm run detector</code> and <code>npm run generator</code>.)</li>
+      <li>Wait about a minute. The first minute is normal traffic, so the system can learn what is normal for each user. Then fraud is injected and the banner starts flashing.</li>
+      <li>Click any red row, or the banner, to see <i>why</i> it was flagged.</li>
+    </ol>
+    <h3>The new tabs</h3>
+    <dl>
+      <dt>Radar</dt><dd>A live radar of all scored transactions, pushed from a MongoDB change stream. Distance from the centre is the risk score. Click a dot for the explanation.</dd>
+      <dt>Attack lab</dt><dd>Launch a botnet, card-testing or impossible-travel attack against the running system and watch the verdicts.</dd>
+      <dt>Fraud rings</dt><dd>Accounts that share a device, found with <code>$graphLookup</code> and drawn as a graph. Launch a botnet in the Attack lab, then press Find rings.</dd>
+      <dt>Rule builder</dt><dd>Write your own rule (amount, risk, z-score, velocity, country, device) and back-test it against recent history. It reports precision and recall next to the built-in model. It is a sandbox: it does not change what the detector flags.</dd>
+    </dl>
+    <p class="muted small">Country and device appear in the explanation as context. The built-in risk score itself uses only the amount and the velocity.</p>
+    <h3>The original tabs</h3>
+    <dl>
+      <dt>Live monitor</dt><dd>A ticker of every scored transaction (red = flagged), charts, the alert list and the pipeline controls. <b>Pause</b> freezes the screen (data keeps flowing in MongoDB). <b>Flagged only</b> hides normal rows. <b>Sound</b> beeps on each new alert.</dd>
+      <dt>Investigate</dt><dd>Pick a user (type an id, or use the chips) to see their typical amount, spread, alert count, a chart of their amounts with the rolling average and an upper limit, and their latest transactions. Click a dot or row for the explanation.</dd>
+      <dt>Try it yourself</dt><dd>Play the fraudster. Enter a user and an amount and send it. Try an amount close to their typical value (normal), then <b>Send a spike</b> (10 times typical) and <b>Send a burst</b> (12 transactions in 3 seconds). Each verdict appears with its risk score and latency.</dd>
+      <dt>Tune &amp; what-if</dt><dd>The chart shows precision (how many alerts were real fraud) and recall (how much fraud was caught) for every threshold, calculated by MongoDB from recent traffic. Drag the threshold slider to see the trade-off. <b>Save</b> applies the settings to the running detector.</dd>
+    </dl>
+    <h3>What the numbers mean</h3>
+    <dl>
+      <dt>Risk (0 to 100)</dt><dd>How suspicious the transaction is. At or above the threshold (default 60) it is flagged.</dd>
+      <dt>z-score</dt><dd>How many "standard deviations" the amount is from this user's typical amount, measured on a log scale. Around 0 is normal; above about 4.6 alone is enough to flag.</dd>
+      <dt>Velocity</dt><dd>How many transactions this user made in the last 5 seconds. The 7th within 5 seconds alone is enough to flag.</dd>
+      <dt>Warm-up</dt><dd>A user needs 20 earlier transactions before their amounts are judged. Until then only velocity counts.</dd>
+      <dt>Precision and recall</dt><dd>Only available for events the generator or this page labelled as fraud (spike or burst). Precision = flagged events that were real fraud. Recall = real fraud that was flagged.</dd>
+    </dl>
+    <h3>Keyboard</h3>
+    <p><kbd>1</kbd> to <kbd>9</kbd> switch tabs, <kbd>p</kbd> pauses the live view, <kbd>Esc</kbd> closes the explanation panel.</p>
+    <h3>If something looks wrong</h3>
+    <ul>
+      <li><b>Banner says "No anomalies yet" for a long time:</b> the detector or the traffic is not running, or the first minute has not passed.</li>
+      <li><b>"Try it" shows "no verdict":</b> the detector is stopped.</li>
+      <li><b>Status shows "offline":</b> the page cannot reach the dashboard server. Is <code>npm run dashboard</code> still running?</li>
+      <li><b>Start does nothing, log mentions mongosh:</b> mongosh is not installed or not on PATH.</li>
+    </ul>
+  </section>
+</div>
+
+<div id="rd-tip"></div>
+<div id="tour"><div class="tstep" id="tour-step"></div><h4 id="tour-title"></h4><p id="tour-text"></p><div class="tbar"><i id="tour-bar"></i></div>
+  <div class="row"><button class="btn" id="tour-stop">Stop the tour</button><span class="muted small">you can click around while it runs</span></div></div>
+<aside id="drawer" aria-label="Transaction explanation"></aside>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

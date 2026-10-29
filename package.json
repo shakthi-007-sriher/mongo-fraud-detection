@@ -1,0 +1,23 @@
+{
+  "name": "fraud-mongo",
+  "version": "3.0.0",
+  "description": "Real-time fraud and anomaly detection in MongoDB: change streams, time-series collections, aggregation pipelines",
+  "private": true,
+  "scripts": {
+    "setup": "mongosh --file mongo/01_setup.js",
+    "detector": "mongosh --file mongo/02_detector.js",
+    "generator": "mongosh --file mongo/03_generator.js",
+    "analytics": "mongosh --file mongo/04_analytics.js",
+    "evaluate": "mongosh --file mongo/05_evaluate.js",
+    "dashboard": "node dashboard/server.js",
+    "test": "node --test test/pipeline.test.js",
+    "simulate": "node reference/simulate.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongodb": "^6.8.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
